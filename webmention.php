@@ -5,7 +5,7 @@
  * Description: Webmention support for WordPress posts
  * Author: Matthias Pfefferle
  * Author URI: https://notiz.blog/
- * Version: 3.8.3
+ * Version: 3.8.8
  * License: MIT
  * License URI: http://opensource.org/licenses/MIT
  * Text Domain: webmention
@@ -19,6 +19,8 @@ define( 'WEBMENTION_PROCESS_TYPE_ASYNC', 'async' );
 define( 'WEBMENTION_PROCESS_TYPE_SYNC', 'sync' );
 
 defined( 'WEBMENTION_PROCESS_TYPE' ) || define( 'WEBMENTION_PROCESS_TYPE', WEBMENTION_PROCESS_TYPE_SYNC );
+
+defined( 'WEBMENTION_VOUCH' ) || define( 'WEBMENTION_VOUCH', false );
 
 add_action( 'plugins_loaded', array( 'Webmention_Plugin', 'init' ) );
 
@@ -60,6 +62,12 @@ class Webmention_Plugin {
 		require_once dirname( __FILE__ ) . '/includes/class-webmention-receiver.php';
 		add_action( 'init', array( 'Webmention_Receiver', 'init' ) );
 
+		// initialize Webmention Vouch
+		if ( WEBMENTION_VOUCH ) {
+			require_once dirname( __FILE__ ) . '/includes/class-webmention-vouch.php';
+			add_action( 'init', array( 'Webmention_Vouch', 'init' ) );
+		}
+
 		// Default Comment Status
 		add_filter( 'get_default_comment_status', array( 'Webmention_Plugin', 'get_default_comment_status' ), 11, 3 );
 		add_filter( 'pings_open', array( 'Webmention_Plugin', 'pings_open' ), 10, 2 );
@@ -68,6 +76,9 @@ class Webmention_Plugin {
 		self::plugin_textdomain();
 
 		add_action( 'comment_form_after', array( 'Webmention_Plugin', 'comment_form' ), 11 );
+
+		add_filter( 'nodeinfo_data', array( 'Webmention_Plugin', 'nodeinfo' ), 10, 2 );
+		add_filter( 'nodeinfo2_data', array( 'Webmention_Plugin', 'nodeinfo2' ), 10 );
 
 		// remove old Webmention code
 		remove_action( 'init', array( 'WebMentionFormPlugin', 'init' ) );
@@ -92,7 +103,7 @@ class Webmention_Plugin {
 	public static function comment_form() {
 		$template = apply_filters( 'webmention_comment_form', plugin_dir_path( __FILE__ ) . 'templates/webmention-comment-form.php' );
 
-		if ( 1 === (int) get_option( 'webmention_show_comment_form' ) ) {
+		if ( 1 === (int) get_option( 'webmention_show_comment_form', 1 ) ) {
 			load_template( $template );
 		}
 	}
@@ -118,5 +129,34 @@ class Webmention_Plugin {
 	 */
 	public static function plugin_textdomain() {
 		load_plugin_textdomain( 'webmention', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+	}
+
+	/**
+	 * Extend NodeInfo data
+	 *
+	 * @param array $nodeinfo NodeInfo data
+	 * @param array $version  updated data
+	 */
+	public static function nodeinfo( $nodeinfo, $version ) {
+		if ( '2.0' == $version) {
+			$nodeinfo['protocols'][] = 'webmention';
+		} else {
+			$nodeinfo['protocols']['inbound'][] = 'webmention';
+			$nodeinfo['protocols']['outbound'][] = 'webmention';
+		}
+
+		return $nodeinfo;
+	}
+
+	/**
+	 * Extend NodeInfo2 data
+	 *
+	 * @param array $nodeinfo NodeInfo2 data
+	 * @param array $version  updated data
+	 */
+	public static function nodeinfo2( $nodeinfo ) {
+		$nodeinfo['protocols'][] = 'webmention';
+
+		return $nodeinfo;
 	}
 }
